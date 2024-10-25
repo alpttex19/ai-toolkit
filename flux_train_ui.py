@@ -1,4 +1,5 @@
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from huggingface_hub import whoami    
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import sys
@@ -91,7 +92,7 @@ def create_dataset(*inputs):
 
             data = {"file_name": file_name, "prompt": original_caption}
 
-            jsonl_file.write(json.dumps(data) + "\n")
+            jsonl_file.write(json.dumps(data, ensure_ascii=False) + "\n")
 
     return destination_folder
 
@@ -172,7 +173,7 @@ def start_training(
     slugged_lora_name = slugify(lora_name)
 
     # Load the default config
-    with open("config/examples/train_lora_flux_24gb.yaml", "r") as f:
+    with open("config/my_first_lora.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Update the config with user inputs
@@ -411,4 +412,4 @@ with gr.Blocks(theme=theme, css=css) as demo:
     do_captioning.click(fn=run_captioning, inputs=[images, concept_sentence] + caption_list, outputs=caption_list)
 
 if __name__ == "__main__":
-    demo.launch(share=True, show_error=True)
+    demo.launch(share=True, show_error=True, server_port=7001)
