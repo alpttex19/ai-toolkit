@@ -31,8 +31,7 @@ saved_path = f"{SAVE_PATH}/dataset"
 def create_dataset(imagepaths, captions, saved_path, lora_name):
     print("Creating dataset")
     images = imagepaths
-    time_suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-    destination_folder = str(f"{saved_path}/{lora_name}/{time_suffix}")
+    destination_folder = str(f"{saved_path}/cache/{lora_name}")
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
 
@@ -132,7 +131,7 @@ def start_training(
     # Update the config with user inputs
     config["config"]["name"] = slugged_lora_name
     config["config"]["process"][0]["model"]["low_vram"] = low_vram
-    config["config"]["process"][0]["training_folder"] = saved_path
+    config["config"]["process"][0]["training_folder"] = f"{saved_path}/loras"
     config["config"]["process"][0]["train"]["skip_first_sample"] = True
     config["config"]["process"][0]["train"]["steps"] = int(steps)
     config["config"]["process"][0]["train"]["lr"] = float(lr)
@@ -175,7 +174,7 @@ def start_training(
     
     # Save the updated config
     # generate a random name for the config
-    config_path = f"{saved_path}/{lora_name}/{slugged_lora_name}.yaml"
+    config_path = f"{saved_path}/cache/{lora_name}/{slugged_lora_name}.yaml"
     with open(config_path, "w") as f:
         yaml.dump(config, f)
     
@@ -201,7 +200,7 @@ def custom_captioning(
     try:
         #Extract images
         unique_id = uuid.uuid4()
-        image_path = f"{saved_path}/images-{unique_id}"
+        image_path = f"{saved_path}/images/{unique_id}"
         os.makedirs(image_path, exist_ok=True)
         with open("images.zip", "wb") as buffer:
             shutil.copyfileobj(files_zip.file, buffer)
@@ -217,7 +216,7 @@ def custom_captioning(
         for file in os.listdir(image_path):
             if not file.endswith(".txt"):
                 imagepath_list.append(f"{image_path}/{file}")
-                imageurl = obs_upload_file(file_path=f"{image_path}/{file}", dir=f"aitoolkit/images-{unique_id}")
+                imageurl = obs_upload_file(file_path=f"{image_path}/{file}", dir=f"aitoolkit/images/{unique_id}")
                 imageurl_list.append(imageurl)
                 # 如果是自动标注，就不需要caption
                 if auto_caption:
@@ -270,7 +269,7 @@ def train_lora(
         imagepath_list = []
         caption_cont_list = []
         for dict in img_caption_list:
-            imagepath_list.append(f"{saved_path}/images-{unique_id}/{dict['name']}")
+            imagepath_list.append(f"{saved_path}/images/{unique_id}/{dict['name']}")
             caption_cont_list.append(dict["caption"])
 
         dataset_folder = create_dataset(imagepath_list, caption_cont_list, saved_path, lora_name)
