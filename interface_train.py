@@ -27,7 +27,10 @@ from toolkit.job import get_job
 
 MAX_IMAGES = 150
 saved_path = f"{SAVE_PATH}/dataset"
-
+# lora相关的存储地址，用于存储图片和模型
+# cache: 存储create_dataset生成的数据集, 新的config文件
+# images: 存储用户上传的图片
+# loras: 存储训练好的模型
 def create_dataset(imagepaths, captions, saved_path, lora_name):
     print("Creating dataset")
     images = imagepaths
@@ -45,7 +48,7 @@ def create_dataset(imagepaths, captions, saved_path, lora_name):
 
             data = {"file_name": file_name, "prompt": original_caption}
 
-            jsonl_file.write(json.dumps(data) + "\n")
+            jsonl_file.write(json.dumps(data, ensure_ascii=False, indent=4) + "\n")
 
     return destination_folder
 
@@ -125,7 +128,7 @@ def start_training(
     slugged_lora_name = slugify(lora_name)
 
     # Load the default config
-    with open("config/my_first_lora.yaml", "r") as f:
+    with open("config/train_lora.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Update the config with user inputs
@@ -319,7 +322,7 @@ def train_lora(
         # 恢复标准输出
         sys.stdout = original_stdout
 
-        return lora_name
+        return {"lora_name": lora_name}
     
     except Exception as e:
         logger.error(f"Error in train_lora: {e}")

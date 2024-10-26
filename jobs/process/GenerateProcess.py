@@ -139,6 +139,6 @@ class GenerateProcess(BaseProcess):
 
             print("Done generating images")
             # cleanup
-            del self.sd
-            gc.collect()
-            torch.cuda.empty_cache()
+            # del self.sd
+            # gc.collect()
+            # torch.cuda.empty_cache()
