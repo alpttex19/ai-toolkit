@@ -27,7 +27,7 @@ app.include_router(interface_gen.router)
 
 
 @app.get("/")
-async def root():
+def root():
     return {"message": "Hello Bigger Applications!"}
 
 if __name__ == '__main__':

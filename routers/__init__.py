@@ -9,22 +9,13 @@ from fastapi.openapi.docs import get_swagger_ui_html
 
 # comfyui的输入输出文件路径
 SAVE_PATH = "/root/autodl-tmp/aitoolkit"
-OUTPUT_PATH = "/root/autodl-tmp/aitoolkit/output"
-# 各类模型生成文件的存放路径，一般在模型内部加 task_id = MODEL_NAME + time_suffix做区分
-STORE_PATH = "/root/autodl-tmp/aitoolkit/model_storage"
-# 用户上传文件的存放路径
-USER_UPLOAD_PATH = "/root/autodl-tmp/aitoolkit/user"
 os.makedirs(SAVE_PATH, exist_ok=True)
-os.makedirs(USER_UPLOAD_PATH, exist_ok=True)
 
 # 配置日志记录
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ERROR")
+logger.setLevel(logging.INFO)
 # 添加文件处理器
-log_file_path = "./logfile.log"
-file_handler = logging.FileHandler(log_file_path)
-file_handler.setLevel(logging.INFO)
-# 创建日志格式器并将其添加到文件处理器
+file_handler = logging.FileHandler("./logfile.log")
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(formatter)
 # 将文件处理器添加到日志记录器

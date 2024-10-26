@@ -1,4 +1,4 @@
-import os
+import os, logging
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from huggingface_hub import whoami    
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from routers import logger, SAVE_PATH
+from routers.obs_client import obs_upload_file
 from fastapi import APIRouter, File, UploadFile
 from datetime import datetime
 import zipfile
@@ -25,12 +26,13 @@ sys.path.insert(0, "ai-toolkit")
 from toolkit.job import get_job
 
 MAX_IMAGES = 150
+saved_path = f"{SAVE_PATH}/dataset"
 
 def create_dataset(imagepaths, captions, saved_path, lora_name):
     print("Creating dataset")
     images = imagepaths
     time_suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-    destination_folder = str(f"{saved_path}/{lora_name}-{time_suffix}")
+    destination_folder = str(f"{saved_path}/{lora_name}/{time_suffix}")
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
 
@@ -49,7 +51,7 @@ def create_dataset(imagepaths, captions, saved_path, lora_name):
     return destination_folder
 
 
-def run_captioning(images, concept_sentence, captions):
+def run_captioning(images, imageurls, captions):
     #Load internally to not consume resources for training
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16
@@ -58,7 +60,7 @@ def run_captioning(images, concept_sentence, captions):
     ).to(device)
     processor = AutoProcessor.from_pretrained("multimodalart/Florence-2-large-no-flash-attn", trust_remote_code=True)
 
-    img_caption_dict = {}
+    img_caption_list = []
     captions = list(captions)
     for i, image_path in enumerate(images):
         print(captions[i])
@@ -77,15 +79,20 @@ def run_captioning(images, concept_sentence, captions):
             generated_text, task=prompt, image_size=(image.width, image.height)
         )
         caption_text = parsed_answer["<DETAILED_CAPTION>"].replace("The image shows ", "")
-        if concept_sentence:
-            caption_text = f"{caption_text} [trigger]"
+        caption_text = f"{caption_text} [trigger]"
         captions[i] = caption_text
-        img_caption_dict[os.path.basename(image_path)] = caption_text
+        img_caption_list.append(
+            {
+                "name": os.path.basename(image_path), 
+                "caption": caption_text, 
+                "url": imageurls[i]
+            }
+        )
 
     model.to("cpu")
     del model
     del processor
-    return img_caption_dict
+    return img_caption_list
 
 def recursive_update(d, u):
     for k, v in u.items():
@@ -114,9 +121,7 @@ def start_training(
     push_to_hub = False
     if not lora_name:
         logger.error("You forgot to insert your LoRA name! This name has to be unique.")
-    
-    logger.warning("Started training locally. Your LoRa will only be available locally because you didn't login with a `write` token to Hugging Face")
-            
+                
     print("Started training")
     slugged_lora_name = slugify(lora_name)
 
@@ -127,6 +132,7 @@ def start_training(
     # Update the config with user inputs
     config["config"]["name"] = slugged_lora_name
     config["config"]["process"][0]["model"]["low_vram"] = low_vram
+    config["config"]["process"][0]["training_folder"] = saved_path
     config["config"]["process"][0]["train"]["skip_first_sample"] = True
     config["config"]["process"][0]["train"]["steps"] = int(steps)
     config["config"]["process"][0]["train"]["lr"] = float(lr)
@@ -148,7 +154,7 @@ def start_training(
     if sample_1 or sample_2 or sample_3:
         config["config"]["process"][0]["train"]["disable_sampling"] = False
         config["config"]["process"][0]["sample"]["sample_every"] = steps
-        config["config"]["process"][0]["sample"]["sample_steps"] = 28
+        config["config"]["process"][0]["sample"]["sample_steps"] = 20
         config["config"]["process"][0]["sample"]["prompts"] = []
         if sample_1:
             config["config"]["process"][0]["sample"]["prompts"].append(sample_1)
@@ -169,8 +175,7 @@ def start_training(
     
     # Save the updated config
     # generate a random name for the config
-    time_suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-    config_path = f"{saved_path}/{slugged_lora_name}-{time_suffix}.yaml"
+    config_path = f"{saved_path}/{lora_name}/{slugged_lora_name}.yaml"
     with open(config_path, "w") as f:
         yaml.dump(config, f)
     
@@ -189,15 +194,12 @@ router = APIRouter(
 )
 
 @router.post("/custom_captioning")
-async def custom_captioning(
-                                lora_name:str,
-                                concept_sentence:str,
+def custom_captioning(
                                 files_zip:UploadFile = File(...), 
                                 auto_caption:bool = False
                             ):
     try:
         #Extract images
-        saved_path = f"{SAVE_PATH}/dataset/{lora_name}"
         unique_id = uuid.uuid4()
         image_path = f"{saved_path}/images-{unique_id}"
         os.makedirs(image_path, exist_ok=True)
@@ -211,9 +213,12 @@ async def custom_captioning(
         
         caption_cont_list = []
         imagepath_list = []
+        imageurl_list = []
         for file in os.listdir(image_path):
             if not file.endswith(".txt"):
                 imagepath_list.append(f"{image_path}/{file}")
+                imageurl = obs_upload_file(file_path=f"{image_path}/{file}", dir=f"aitoolkit/images-{unique_id}")
+                imageurl_list.append(imageurl)
                 # 如果是自动标注，就不需要caption
                 if auto_caption:
                     caption_cont_list.append("[trigger]")
@@ -225,15 +230,20 @@ async def custom_captioning(
                         caption_cont_list.append("[trigger]")
                     else:
                         with open(f"{image_path}/{base_name}.txt", "r") as file:
-                            caption_cont_list.append(file.read())
+                            caption_cont_list.append(file.read() + " [trigger]")
         if auto_caption:
-            img_caption_dict = run_captioning(imagepath_list, concept_sentence, caption_cont_list)
+            img_caption_list = run_captioning(imagepath_list, imageurl_list, caption_cont_list)
         else:
-            img_caption_dict = {}
+            img_caption_list = []
             for i, image_path in enumerate(imagepath_list):
-                img_caption_dict[os.path.basename(image_path)] = caption_cont_list[i]
-
-        return {"unique_id": unique_id, "img_caption_dict": img_caption_dict}
+                img_caption_list.append(
+                    {
+                        "name": os.path.basename(image_path), 
+                        "caption": caption_cont_list[i], 
+                        "url": imageurl_list[i]
+                    }
+                )
+        return {"unique_id": unique_id, "img_caption_list": img_caption_list}
         
     except Exception as e:
         logger.error(f"Error in custom_captioning: {e}")
@@ -242,11 +252,10 @@ async def custom_captioning(
 
 
 @router.post("/train_lora")
-async def train_lora(   
+def train_lora(   
                         lora_name:str, 
-                        unique_id:str,
                         concept_sentence:str,
-                        img_caption_dict:dict,
+                        imgcaption_and_id:dict,
                         steps:int = 1000,
                         lr:float = 4e-4,
                         rank:int = 16,
@@ -254,15 +263,44 @@ async def train_lora(
                         low_vram:bool = True,
                     ):
     try:
-        saved_path = f"{SAVE_PATH}/dataset/{lora_name}"
+        lora_unique_id = uuid.uuid4()
+        lora_name = f"{lora_name}-{lora_unique_id}"
+        unique_id = imgcaption_and_id["unique_id"]
+        img_caption_list = imgcaption_and_id["img_caption_list"]
         imagepath_list = []
         caption_cont_list = []
-        for key in img_caption_dict.keys():
-            imagepath_list.append(f"{saved_path}/images-{unique_id}/{key}")
-            caption_cont_list.append(img_caption_dict[key])
+        for dict in img_caption_list:
+            imagepath_list.append(f"{saved_path}/images-{unique_id}/{dict['name']}")
+            caption_cont_list.append(dict["caption"])
 
         dataset_folder = create_dataset(imagepath_list, caption_cont_list, saved_path, lora_name)
+        
+        # 配置查询状态 logger
+        process_query = logging.getLogger('process_query')
+        process_query.setLevel(logging.INFO)
+        # 配置处理程序
+        file_handler2 = logging.FileHandler(f'{saved_path}/train_log.log')
+        formatter2 = logging.Formatter('%(name)s: %(message)s')
+        file_handler2.setFormatter(formatter2)
+        process_query.addHandler(file_handler2)
 
+        class StreamToLogger:
+            def __init__(self, level=logging.INFO):
+                self.level = level
+
+            def write(self, message):
+                # 仅处理非空消息
+                if message.rstrip():  
+                    process_query.info(message.rstrip())
+
+            def flush(self):
+                pass
+        # 保存原始sys.stdout，以便恢复
+        original_stdout = sys.stdout
+
+        # 将sys.stdout重定向到StreamToLogger对象
+        sys.stdout = StreamToLogger()
+        
         progress_area = start_training(
             saved_path,
             lora_name,
@@ -279,12 +317,25 @@ async def train_lora(
             False,
             None
         )
+        # 恢复标准输出
+        sys.stdout = original_stdout
 
-        return progress_area
+        return lora_name
     
     except Exception as e:
         logger.error(f"Error in train_lora: {e}")
         raise Exception("Error in train_lora")
+    
+@router.post("/process_query")
+def process_query():
+    try:
+        with open(f"{saved_path}/train_log.log", "r") as f:
+            process_query = f.read()
+            last_msg = process_query.split("process_query:")[-1]
+        return {"last_msg": last_msg}
+    except Exception as e:
+        logger.error(f"Error in process_query: {e}")
+        raise Exception("Error in process_query")
 
 if __name__ == "__main__":
     pass

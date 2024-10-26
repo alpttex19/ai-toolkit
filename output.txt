@@ -1,0 +1,135 @@
+Hello, this will be written to the file.
+Started training
+{
+    "type": "sd_trainer",
+    "training_folder": "output",
+    "device": "cuda:0",
+    "network": {
+        "type": "lora",
+        "linear": 16,
+        "linear_alpha": 16
+    },
+    "save": {
+        "dtype": "float16",
+        "save_every": 250,
+        "max_step_saves_to_keep": 4,
+        "push_to_hub": false
+    },
+    "datasets": [
+        {
+            "folder_path": "/root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327",
+            "caption_ext": "txt",
+            "caption_dropout_rate": 0.05,
+            "shuffle_tokens": false,
+            "cache_latents_to_disk": true,
+            "resolution": [
+                512,
+                768,
+                1024
+            ]
+        }
+    ],
+    "train": {
+        "batch_size": 1,
+        "steps": 1000,
+        "gradient_accumulation_steps": 1,
+        "train_unet": true,
+        "train_text_encoder": false,
+        "gradient_checkpointing": true,
+        "noise_scheduler": "flowmatch",
+        "optimizer": "adamw8bit",
+        "lr": 0.0004,
+        "ema_config": {
+            "use_ema": true,
+            "ema_decay": 0.99
+        },
+        "dtype": "bf16",
+        "skip_first_sample": true,
+        "disable_sampling": true
+    },
+    "model": {
+        "name_or_path": "/root/autodl-fs/models/FLUX_DEV",
+        "is_flux": true,
+        "quantize": true,
+        "low_vram": true
+    },
+    "sample": {
+        "sampler": "flowmatch",
+        "sample_every": 250,
+        "width": 1024,
+        "height": 1024,
+        "prompts": [
+            "woman with red hair, playing chess at the park, bomb going off in the background"
+        ],
+        "neg": "",
+        "seed": 42,
+        "walk_seed": true,
+        "guidance_scale": 4,
+        "sample_steps": 20
+    },
+    "trigger_word": "zxcvbnm"
+}
+Using EMA
+
+#############################################
+# Running job: zxcvbnm
+#############################################
+
+
+Running  1 process
+Loading Flux model
+Loading transformer
+Quantizing transformer
+Loading vae
+Loading t5
+Quantizing T5
+Loading clip
+making pipe
+preparing
+create LoRA network. base dim (rank): 16, alpha: 16
+neuron dropout: p=None, rank dropout: p=None, module dropout: p=None
+create LoRA for Text Encoder: 0 modules.
+create LoRA for U-Net: 494 modules.
+#### IMPORTANT RESUMING FROM output/zxcvbnm/zxcvbnm_000000750.safetensors ####
+Loading from output/zxcvbnm/zxcvbnm_000000750.safetensors
+Missing keys: []
+Found step 750 in metadata, starting from there
+Loading optimizer state from output/zxcvbnm/optimizer.pt
+Updating optimizer LR from params
+Dataset: /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+  -  Preprocessing image dimensions
+  -  Found 8 images
+Bucket sizes for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327:
+512x512: 1 files
+576x384: 1 files
+448x576: 3 files
+384x640: 2 files
+384x576: 1 files
+5 buckets made
+Caching latents for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+ - Saving latents to disk
+Dataset: /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+  -  Preprocessing image dimensions
+  -  Found 8 images
+Bucket sizes for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327:
+768x768: 1 files
+832x576: 1 files
+640x832: 3 files
+576x960: 2 files
+448x704: 1 files
+5 buckets made
+Caching latents for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+ - Saving latents to disk
+Dataset: /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+  -  Preprocessing image dimensions
+  -  Found 8 images
+Bucket sizes for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327:
+832x832: 1 files
+960x640: 1 files
+832x1152: 3 files
+704x1216: 2 files
+448x704: 1 files
+5 buckets made
+Caching latents for /root/autodl-tmp/aitoolkit/dataset/zxcvbnm/zxcvbnm-20241026-143327
+ - Saving latents to disk
+Skipping first sample due to config setting

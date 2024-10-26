@@ -48,7 +48,7 @@ router = APIRouter(
 )
 
 @router.post("/gen_by_lora")
-async def gen_by_lora(lora_name:str, prompts:list[str]):
+def gen_by_lora(lora_name:str, prompts:list[str]):
     class Args():
         def __init__(self):
             self.config_file = 'config/generate.yaml'
