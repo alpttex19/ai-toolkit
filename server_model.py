@@ -11,8 +11,9 @@ app.add_middleware( CORSMiddleware, allow_origins=["*"], # 允许的源
                     allow_headers=["*"], # 允许的 HTTP 头 
                     )
 
-import interface
-app.include_router(interface.router)
+import interface_gen, interface_train
+app.include_router(interface_train.router)
+app.include_router(interface_gen.router)
 
 
 # 之后可以使用
