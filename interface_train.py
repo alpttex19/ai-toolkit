@@ -10,6 +10,7 @@ sys.path.insert(0, os.getcwd())
 from routers import logger, SAVE_PATH
 from routers.obs_client import obs_upload_file
 from fastapi import APIRouter, File, UploadFile
+from pydantic import BaseModel
 from datetime import datetime
 import zipfile
 from PIL import Image
@@ -201,124 +202,152 @@ def custom_captioning(
                                 auto_caption:bool = False
                             ):
     try:
-        #Extract images
-        unique_id = uuid.uuid4()
-        image_path = f"{saved_path}/images/{unique_id}"
-        os.makedirs(image_path, exist_ok=True)
-        with open("images.zip", "wb") as buffer:
-            shutil.copyfileobj(files_zip.file, buffer)
+        try:
+            #Extract images
+            unique_id = uuid.uuid4()
+            image_path = f"{saved_path}/images/{unique_id}"
+            os.makedirs(image_path, exist_ok=True)
+            with open("images.zip", "wb") as buffer:
+                shutil.copyfileobj(files_zip.file, buffer)
 
-        shutil.rmtree(image_path, ignore_errors=True)
-        with zipfile.ZipFile("images.zip", "r") as zip_ref:
-            zip_ref.extractall(path=image_path)
-            os.remove("images.zip")
-        
-        caption_cont_list = []
-        imagepath_list = []
-        imageurl_list = []
-        for file in os.listdir(image_path):
-            if not file.endswith(".txt"):
-                imagepath_list.append(f"{image_path}/{file}")
-                imageurl = obs_upload_file(file_path=f"{image_path}/{file}", dir=f"aitoolkit/images/{unique_id}")
-                imageurl_list.append(imageurl)
-                # 如果是自动标注，就不需要caption
-                if auto_caption:
-                    caption_cont_list.append("[trigger]")
-                # 如果是手动标注，就需要读取caption
-                else:
-                    base_name = os.path.splitext(file)[0]
-                    # 如果没有caption文件，就用[trigger]
-                    if not os.path.exists(f"{image_path}/{base_name}.txt"):
+            shutil.rmtree(image_path, ignore_errors=True)
+            with zipfile.ZipFile("images.zip", "r") as zip_ref:
+                zip_ref.extractall(path=image_path)
+                os.remove("images.zip")
+            
+            caption_cont_list = []
+            imagepath_list = []
+            imageurl_list = []
+            for file in os.listdir(image_path):
+                if not file.endswith(".txt"):
+                    imagepath_list.append(f"{image_path}/{file}")
+                    imageurl = obs_upload_file(file_path=f"{image_path}/{file}", dir=f"aitoolkit/images/{unique_id}")
+                    imageurl_list.append(imageurl)
+                    # 如果是自动标注，就不需要caption
+                    if auto_caption:
                         caption_cont_list.append("[trigger]")
+                    # 如果是手动标注，就需要读取caption
                     else:
-                        with open(f"{image_path}/{base_name}.txt", "r") as file:
-                            caption_cont_list.append(file.read() + " [trigger]")
-        if auto_caption:
-            img_caption_list = run_captioning(imagepath_list, imageurl_list, caption_cont_list)
-        else:
-            img_caption_list = []
-            for i, image_path in enumerate(imagepath_list):
-                img_caption_list.append(
-                    {
-                        "name": os.path.basename(image_path), 
-                        "caption": caption_cont_list[i], 
-                        "url": imageurl_list[i]
-                    }
-                )
+                        base_name = os.path.splitext(file)[0]
+                        # 如果没有caption文件，就用[trigger]
+                        if not os.path.exists(f"{image_path}/{base_name}.txt"):
+                            caption_cont_list.append("[trigger]")
+                        else:
+                            with open(f"{image_path}/{base_name}.txt", "r") as file:
+                                caption_cont_list.append(file.read() + " [trigger]")
+        except Exception as e:
+            logger.error(f"Error while handling the dataset: {e}")
+            raise Exception(f"Error while handling the dataset:{e}")
+        try:
+            if auto_caption:
+                img_caption_list = run_captioning(imagepath_list, imageurl_list, caption_cont_list)
+            else:
+                img_caption_list = []
+                for i, image_path in enumerate(imagepath_list):
+                    img_caption_list.append(
+                        {
+                            "name": os.path.basename(image_path), 
+                            "caption": caption_cont_list[i], 
+                            "url": imageurl_list[i]
+                        }
+                    )
+        except Exception as e:
+            logger.error(f"Error while running the captioning model: {e}")
+            raise Exception(f"Error while running the captioning model:{e}")
+        
         return {"unique_id": unique_id, "img_caption_list": img_caption_list}
         
     except Exception as e:
         logger.error(f"Error in custom_captioning: {e}")
-        raise Exception("Error in custom_captioning")
+        return {"error": f"Error in custom_captioning: {e}"}
 
-
+class TrainLoraRequest(BaseModel):
+    lora_name: str
+    concept_sentence: str
+    imgcaption_and_id: dict
+    steps: int=1000
+    lr: float=4e-4
+    rank: int=16
+    flux_model: str= "dev"
+    low_vram: bool = True
 
 @router.post("/train_lora")
 def train_lora(   
-                        lora_name:str, 
-                        concept_sentence:str,
-                        imgcaption_and_id:dict,
-                        steps:int = 1000,
-                        lr:float = 4e-4,
-                        rank:int = 16,
-                        model_to_train:str = "dev",
-                        low_vram:bool = True,
-                    ):
+                request: TrainLoraRequest
+                ):
     try:
-        lora_unique_id = uuid.uuid4()
-        lora_name = f"{lora_name}-{lora_unique_id}"
-        unique_id = imgcaption_and_id["unique_id"]
-        img_caption_list = imgcaption_and_id["img_caption_list"]
-        imagepath_list = []
-        caption_cont_list = []
-        for dict in img_caption_list:
-            imagepath_list.append(f"{saved_path}/images/{unique_id}/{dict['name']}")
-            caption_cont_list.append(dict["caption"])
+        lora_name = request.lora_name
+        concept_sentence = request.concept_sentence
+        imgcaption_and_id = request.imgcaption_and_id
+        steps = request.steps
+        lr = request.lr
+        rank = request.rank
+        flux_model = request.flux_model
+        low_vram = request.low_vram
 
-        dataset_folder = create_dataset(imagepath_list, caption_cont_list, saved_path, lora_name)
+        try:
+            unique_id = imgcaption_and_id["unique_id"]
+            img_caption_list = imgcaption_and_id["img_caption_list"]
+            imagepath_list = []
+            caption_cont_list = []
+            for dict in img_caption_list:
+                imagepath_list.append(f"{saved_path}/images/{unique_id}/{dict['name']}")
+                caption_cont_list.append(dict["caption"])
+
+            dataset_folder = create_dataset(imagepath_list, caption_cont_list, saved_path, lora_name)
+        except Exception as e:
+            logger.error(f"Error while creating the dataset: {e}")
+            raise Exception(f"Error while creating the dataset:{e}")
         
-        # 配置查询状态 logger
-        process_query = logging.getLogger('process_query')
-        process_query.setLevel(logging.INFO)
-        # 配置处理程序
-        file_handler2 = logging.FileHandler(f'{saved_path}/train_log.log')
-        formatter2 = logging.Formatter('%(name)s: %(message)s')
-        file_handler2.setFormatter(formatter2)
-        process_query.addHandler(file_handler2)
+        try:
+            # 配置查询状态 logger
+            process_query = logging.getLogger('process_query')
+            process_query.setLevel(logging.INFO)
+            # 配置处理程序
+            file_handler2 = logging.FileHandler(f'{saved_path}/train_log_{lora_name}.log')
+            formatter2 = logging.Formatter('%(name)s: %(message)s')
+            file_handler2.setFormatter(formatter2)
+            process_query.addHandler(file_handler2)
 
-        class StreamToLogger:
-            def __init__(self, level=logging.INFO):
-                self.level = level
+            class StreamToLogger:
+                def __init__(self, level=logging.INFO):
+                    self.level = level
 
-            def write(self, message):
-                # 仅处理非空消息
-                if message.rstrip():  
-                    process_query.info(message.rstrip())
+                def write(self, message):
+                    # 仅处理非空消息
+                    if message.rstrip():  
+                        process_query.info(message.rstrip())
 
-            def flush(self):
-                pass
-        # 保存原始sys.stdout，以便恢复
-        original_stdout = sys.stdout
+                def flush(self):
+                    pass
+            # 保存原始sys.stdout，以便恢复
+            original_stdout = sys.stdout
 
-        # 将sys.stdout重定向到StreamToLogger对象
-        sys.stdout = StreamToLogger()
-        
-        progress_area = start_training(
-            saved_path,
-            lora_name,
-            concept_sentence,
-            steps,
-            lr,
-            rank,
-            model_to_train,
-            low_vram,
-            dataset_folder,
-            None,
-            None,
-            None,
-            False,
-            None
-        )
+            # 将sys.stdout重定向到StreamToLogger对象
+            sys.stdout = StreamToLogger()
+        except Exception as e:
+            logger.error(f"Error while setting up the logger: {e}")
+            raise Exception(f"Error while setting up the logger:{e}")
+        try:
+            progress_area = start_training(
+                saved_path,
+                lora_name,
+                concept_sentence,
+                steps,
+                lr,
+                rank,
+                flux_model,
+                low_vram,
+                dataset_folder,
+                None,
+                None,
+                None,
+                False,
+                None
+            )
+        except Exception as e:
+            logger.error(f"Error while training: {e}")
+            raise Exception(f"Error while training:{e}")
         # 恢复标准输出
         sys.stdout = original_stdout
 
@@ -326,18 +355,18 @@ def train_lora(
     
     except Exception as e:
         logger.error(f"Error in train_lora: {e}")
-        raise Exception("Error in train_lora")
+        return {"error": f"Error in train_lora: {e}"}
     
-@router.post("/process_query")
-def process_query():
+@router.get("/process_query")
+def process_query(lora_name:str):
     try:
-        with open(f"{saved_path}/train_log.log", "r") as f:
+        with open(f"{saved_path}/train_log_{lora_name}.log", "r") as f:
             process_query = f.read()
             last_msg = process_query.split("process_query:")[-1]
         return {"last_msg": last_msg}
     except Exception as e:
-        logger.error(f"Error in process_query: {e}")
-        raise Exception("Error in process_query")
+        logger.error(f"no such lora model is traing: {e}")
+        raise Exception(f"no such lora model is traing: {e}")
 
 if __name__ == "__main__":
     pass

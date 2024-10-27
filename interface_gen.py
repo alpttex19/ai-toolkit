@@ -4,7 +4,8 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import sys
 import json
 from typing import Union, OrderedDict
-from routers import ImageResponse
+from pydantic import BaseModel
+from routers import ImageResponse, logger
 from routers.obs_client import obs_upload_file
 from fastapi import APIRouter
 from dotenv import load_dotenv
@@ -51,36 +52,45 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+class GenByLoraRequest(BaseModel):
+    lora_name: str
+    prompts: list[str]
+
 @router.post("/gen_by_lora")
-def gen_by_lora(lora_name:str, prompts:list[str]):
-    class Args():
-        def __init__(self):
-            self.config_file = 'config/generate.yaml'
-            self.recover = False
-            self.name = None
+def gen_by_lora(request: GenByLoraRequest):
+    try:
+        lora_name = request.lora_name
+        prompts = request.prompts
+        class Args():
+            def __init__(self):
+                self.config_file = 'config/generate.yaml'
+                self.recover = False
+                self.name = None
 
-    args = Args()
+        args = Args()
 
-    jobs_completed = 0
-    jobs_failed = 0
+        jobs_completed = 0
+        jobs_failed = 0
 
-    config_file = args.config_file
-    config = get_config(config_file, args.name)
-    
-    config['config']['name'] = lora_name
-    config['config']['process'][0]['output_folder'] = f"{imgsave_path}/{lora_name}"
-    config['config']['process'][0]['generate']['prompts'] = prompts
-    config['config']['process'][0]['model']['lora_path'] = f"{lora_path}/{lora_name}/{lora_name}.safetensors"
+        config_file = args.config_file
+        config = get_config(config_file, args.name)
+        
+        config['config']['name'] = lora_name
+        config['config']['process'][0]['output_folder'] = f"{imgsave_path}/{lora_name}"
+        config['config']['process'][0]['generate']['prompts'] = prompts
+        config['config']['process'][0]['model']['lora_path'] = f"{lora_path}/{lora_name}/{lora_name}.safetensors"
 
-    os.makedirs(f"{imgsave_path}", exist_ok=True)
-    config_file = f"{imgsave_path}/{lora_name}.yaml"
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=4, ensure_ascii=False)
-    
+        os.makedirs(f"{imgsave_path}", exist_ok=True)
+        config_file = f"{imgsave_path}/{lora_name}.yaml"
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error while processing the config file: {e}")
+        raise Exception(f"Error while processing the config file: {e}")
     try:
         job = get_job(config_file, args.name)
         job.run()
-        # job.cleanup()
+        job.cleanup()
         jobs_completed += 1
 
         all_images = os.listdir(f"{imgsave_path}/{lora_name}")
@@ -94,11 +104,13 @@ def gen_by_lora(lora_name:str, prompts:list[str]):
         return ImageResponse(code=200, message="Success", data=image_urls)
         
     except Exception as e:
-        print(f"Error running job: {e}")
+        logger.error(f"Error running job: {e}")
         jobs_failed += 1
         if not args.recover:
             print_end_message(jobs_completed, jobs_failed)
-            raise e
+            raise Exception(f"Error running job: {e}")    
+        return ImageResponse(code=500, message=f"Failed;{e}", data=[])
+        
 
     
 if __name__ == '__main__':

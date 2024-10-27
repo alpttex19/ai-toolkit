@@ -173,7 +173,7 @@ def start_training(
     slugged_lora_name = slugify(lora_name)
 
     # Load the default config
-    with open("config/my_first_lora.yaml", "r") as f:
+    with open("config/train_lora.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Update the config with user inputs
