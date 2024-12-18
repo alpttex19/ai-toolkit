@@ -78,7 +78,7 @@ def hide_captioning():
 def create_dataset(*inputs):
     print("Creating dataset")
     images = inputs[0]
-    destination_folder = str(f"datasets/{uuid.uuid4()}")
+    destination_folder = str(f"/root/autodl-fs/aitoolkit/cache/{uuid.uuid4()}")
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
 
@@ -412,4 +412,4 @@ with gr.Blocks(theme=theme, css=css) as demo:
     do_captioning.click(fn=run_captioning, inputs=[images, concept_sentence] + caption_list, outputs=caption_list)
 
 if __name__ == "__main__":
-    demo.launch(share=True, show_error=True, server_port=7001)
+    demo.launch(share=True, show_error=True, server_port=6006)
