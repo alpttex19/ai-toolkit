@@ -8,7 +8,8 @@ from collections import OrderedDict
 import os
 import re
 from typing import Union, List, Optional
-
+import torch
+import gc
 import numpy as np
 import yaml
 from diffusers import T2IAdapter, ControlNetModel
@@ -63,6 +64,24 @@ def flush():
     torch.cuda.empty_cache()
     gc.collect()
 
+def move_to_cpu_and_delete(obj):
+        """
+        将传入的所有张量移到 CPU 上并删除它们。
+        """
+        if obj is not None:
+            if isinstance(obj, (torch.nn.Module, torch.Tensor)):
+                obj.to('cpu')
+            elif isinstance(obj, torch.optim.Optimizer):
+                for state in obj.state.values():
+                    if isinstance(state, dict):
+                        for param in state.values():
+                            if isinstance(param, torch.Tensor):
+                                param.data = param.data.cpu()
+                                if param._grad is not None:
+                                    param._grad.data = param._grad.data.cpu()
+            del obj
+        gc.collect()
+        torch.cuda.empty_cache()
 
 class BaseSDTrainProcess(BaseTrainProcess):
 
@@ -1844,15 +1863,34 @@ class BaseSDTrainProcess(BaseTrainProcess):
                 repo_id=self.save_config.hf_repo_id,
                 private=self.save_config.hf_private
             )
-        del (
-            self.sd,
-            unet,
-            noise_scheduler,
-            optimizer,
-            self.network,
-            tokenizer,
-            text_encoder,
-        )
+        
+        
+        try:
+            # 删除pipeline中的所有属性
+            attributes = [attr for attr in dir(self.sd.pipeline) if not attr.startswith('__')]
+            for attr in attributes:
+                if hasattr(self.sd.pipeline, attr):
+                    value = getattr(self.sd.pipeline, attr)
+                    move_to_cpu_and_delete(attr)
+            # 删除sd中的所有属性
+            attributes = [attr for attr in dir(self.sd) if not attr.startswith('__')]
+            for attr in attributes:
+                if hasattr(self.sd, attr):
+                    value = getattr(self.sd, attr)
+                    move_to_cpu_and_delete(attr)
+            # 删除self中的所有属性
+            attributes = [attr for attr in dir(self) if not attr.startswith('__')]
+            for attr in attributes:
+                if hasattr(self, attr):
+                    value = getattr(self, attr)
+                    move_to_cpu_and_delete(attr)
+            move_to_cpu_and_delete(unet)
+            move_to_cpu_and_delete(noise_scheduler)
+            move_to_cpu_and_delete(optimizer) 
+            move_to_cpu_and_delete(tokenizer)
+            move_to_cpu_and_delete(text_encoder)
+        except:
+            print("Failed to move to cpu")
 
         flush()
 
