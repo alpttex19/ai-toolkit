@@ -1833,7 +1833,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
                 # update various steps
                 self.step_num = step + 1
                 self.grad_accumulation_step += 1
-            print(f"Step {step}, lr: {learning_rate:.1e}, loss: {loss_dict}")
+            print(f"Step {step/self.train_config.steps}, lr: {learning_rate:.1e}, loss: {loss_dict}")
 
         ###################################################################
         ##  END TRAIN LOOP
