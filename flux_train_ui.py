@@ -102,9 +102,9 @@ def run_captioning(images, concept_sentence, *captions):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16
     model = AutoModelForCausalLM.from_pretrained(
-        "multimodalart/Florence-2-large-no-flash-attn", torch_dtype=torch_dtype, trust_remote_code=True
+        "/root/autodl-fs/models/Florence", torch_dtype=torch_dtype, trust_remote_code=True
     ).to(device)
-    processor = AutoProcessor.from_pretrained("multimodalart/Florence-2-large-no-flash-attn", trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained("/root/autodl-fs/models/Florence", trust_remote_code=True)
 
     captions = list(captions)
     for i, image_path in enumerate(images):
@@ -125,7 +125,7 @@ def run_captioning(images, concept_sentence, *captions):
         )
         caption_text = parsed_answer["<DETAILED_CAPTION>"].replace("The image shows ", "")
         if concept_sentence:
-            caption_text = f"{caption_text} [trigger]"
+            caption_text = f"[trigger] {caption_text} [trigger]"
         captions[i] = caption_text
 
         yield captions

@@ -821,6 +821,7 @@ class StableDiffusion:
                 ).to(self.device_torch)
 
             self.refiner_unet = refiner.unet
+            refiner.to('cpu')
             del refiner
             flush()
 

@@ -10,3 +10,6 @@
 [submodule "repositories/ipadapter"]
 	path = repositories/ipadapter
 	url = git@github.com:tencent-ailab/IP-Adapter.git
+[submodule "MyRouter"]
+	path = MyRouter
+	url = https://github.com/alpttex19/MyRouter.git

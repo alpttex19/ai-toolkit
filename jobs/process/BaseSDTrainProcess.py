@@ -65,23 +65,16 @@ def flush():
     gc.collect()
 
 def move_to_cpu_and_delete(obj):
-        """
-        将传入的所有张量移到 CPU 上并删除它们。
-        """
-        if obj is not None:
-            if isinstance(obj, (torch.nn.Module, torch.Tensor)):
-                obj.to('cpu')
-            elif isinstance(obj, torch.optim.Optimizer):
-                for state in obj.state.values():
-                    if isinstance(state, dict):
-                        for param in state.values():
-                            if isinstance(param, torch.Tensor):
-                                param.data = param.data.cpu()
-                                if param._grad is not None:
-                                    param._grad.data = param._grad.data.cpu()
-            del obj
+    """
+    将传入的所有张量移到 CPU 上并删除它们。
+    """
+    try:
+        obj.to(torch.device('cpu'))
+        del obj
         gc.collect()
         torch.cuda.empty_cache()
+    except Exception as e:
+        pass
 
 class BaseSDTrainProcess(BaseTrainProcess):
 
@@ -1866,24 +1859,20 @@ class BaseSDTrainProcess(BaseTrainProcess):
         
         
         try:
-            # 删除pipeline中的所有属性
-            attributes = [attr for attr in dir(self.sd.pipeline) if not attr.startswith('__')]
-            for attr in attributes:
-                if hasattr(self.sd.pipeline, attr):
-                    value = getattr(self.sd.pipeline, attr)
-                    move_to_cpu_and_delete(attr)
-            # 删除sd中的所有属性
-            attributes = [attr for attr in dir(self.sd) if not attr.startswith('__')]
-            for attr in attributes:
-                if hasattr(self.sd, attr):
-                    value = getattr(self.sd, attr)
-                    move_to_cpu_and_delete(attr)
-            # 删除self中的所有属性
-            attributes = [attr for attr in dir(self) if not attr.startswith('__')]
-            for attr in attributes:
-                if hasattr(self, attr):
-                    value = getattr(self, attr)
-                    move_to_cpu_and_delete(attr)
+            move_to_cpu_and_delete(self.sd.pipeline.transformer.single_transformer_blocks)
+            move_to_cpu_and_delete(self.sd.pipeline.transformer.transformer_blocks)
+            move_to_cpu_and_delete(self.sd.pipeline.transformer)
+            move_to_cpu_and_delete(self.sd.pipeline.text_encoder)
+            move_to_cpu_and_delete(self.sd.pipeline.text_encoder_2)
+            move_to_cpu_and_delete(self.sd.pipeline.vae)
+            move_to_cpu_and_delete(self.sd.pipeline)
+            move_to_cpu_and_delete(self.sd.unet)
+            move_to_cpu_and_delete(self.sd.vae)           
+            move_to_cpu_and_delete(self.sd.adapter)
+            move_to_cpu_and_delete(self.sd.refiner_unet)
+            move_to_cpu_and_delete(self.sd)
+            ###############################
+            move_to_cpu_and_delete(vae)
             move_to_cpu_and_delete(unet)
             move_to_cpu_and_delete(noise_scheduler)
             move_to_cpu_and_delete(optimizer) 
