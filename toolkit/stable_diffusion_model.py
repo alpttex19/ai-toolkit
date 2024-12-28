@@ -740,7 +740,6 @@ class StableDiffusion:
         self.unet.to(self.device_torch, dtype=dtype)
         self.unet.requires_grad_(False)
         self.unet.eval()
-        print(f"Memory allocated for 'unet': {torch.cuda.memory_allocated(self.unet.device)} bytes")
 
         # load any loras we have
         if self.model_config.lora_path is not None and not self.is_flux:
