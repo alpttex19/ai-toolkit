@@ -1,15 +1,20 @@
 [submodule "repositories/sd-scripts"]
 	path = repositories/sd-scripts
-	url = git@github.com:kohya-ss/sd-scripts.git
+	url = https://github.com/kohya-ss/sd-scripts.git
+	ignore = all
 [submodule "repositories/leco"]
 	path = repositories/leco
-	url = git@github.com:p1atdev/LECO.git
+	url = https://github.com/p1atdev/LECO.git
+	ignore = all
 [submodule "repositories/batch_annotator"]
 	path = repositories/batch_annotator
-	url = git@github.com:ostris/batch-annotator.git
+	url = https://github.com/ostris/batch-annotator.git
+	ignore = all
 [submodule "repositories/ipadapter"]
 	path = repositories/ipadapter
-	url = git@github.com:tencent-ailab/IP-Adapter.git
+	url = https://github.com/tencent-ailab/IP-Adapter.git
+	ignore = all
 [submodule "MyRouter"]
 	path = MyRouter
 	url = https://github.com/alpttex19/MyRouter.git
+	ignore = all
